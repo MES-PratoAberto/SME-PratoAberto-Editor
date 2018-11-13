@@ -4,27 +4,29 @@ import configparser
 import datetime
 import json
 import os
-from operator import itemgetter
-
-import flask_login
-import requests
-from flask import Flask, flash, redirect, render_template, request, url_for, make_response
-from werkzeug.utils import secure_filename
-
 import cardapio_xml_para_dict
 import db_functions
 import db_setup
+import flask_login
+import requests
+
+from operator import itemgetter
+from flask import Flask, flash, redirect, render_template, request, url_for, make_response
+from werkzeug.utils import secure_filename
 from login.login import login_app
 from configuracoes.configuracoes import config_app
-from utils.utils import get_publicacao,caso_nao_cardapio,get_depara,get_cardapio_atual,get_cardapio_anterior,\
+from pendencias.pendencias import pendencias_app
+from utils.utils import caso_nao_cardapio,get_depara,get_cardapio_atual,get_cardapio_anterior,\
                         get_cardapio_lista,get_cardapios_terceirizadas,get_quebras_escolas,get_cardapio,get_escola,\
-                        get_escolas,get_grupo_publicacoes,allowed_file,dia_semana
+                        get_escolas,get_grupo_publicacoes,allowed_file,dia_semana,get_semana
 
 def create_app():
 
     app = Flask(__name__)
+    app.register_blueprint(pendencias_app)
     app.register_blueprint(login_app)
     app.register_blueprint(config_app)
+
     return app
 
 app = create_app()
@@ -80,30 +82,6 @@ def request_loader(request):
 @login_manager.unauthorized_handler
 def unauthorized_handler():
     return 'Unauthorized'
-
-@app.route("/pendencias_publicacoes", methods=["GET", "POST"])
-@flask_login.login_required
-def backlog():
-    if request.method == "GET" or request.method == "POST":
-        status = "pendencias"
-        return get_publicacao(status)
-
-
-@app.route("/pendencias_deletadas", methods=["GET", "POST"])
-@flask_login.login_required
-def deletados():
-    if request.method == "GET":
-        status = "deletados"
-        return get_publicacao(status)
-
-
-@app.route("/pendencias_publicadas", methods=["GET", "POST"])
-@flask_login.login_required
-def publicados():
-    if request.method == "GET":
-        status = "publicadas"
-        return get_publicacao(status)
-
 
 @app.route('/upload', methods=['POST'])
 @flask_login.login_required
@@ -273,7 +251,7 @@ def upload_terceirizadas():
 
     if request.form:
 
-        return (redirect(url_for('backlog')))
+        return (redirect(url_for('pendencias_app.backlog')))
     else:
 
         return ('', 200)
@@ -288,7 +266,7 @@ def atualiza_cardapio():
 
     if request.form:
 
-        return (redirect(url_for('backlog')))
+        return (redirect(url_for('pendencias_app.backlog')))
     else:
 
         return ('', 200)
@@ -433,8 +411,9 @@ def calendario_grupo_cardapio():
         lista_args.append(args)
 
     if (len(set(lista_data_inicial)) > 1) or (len(set(lista_data_final)) > 1):
+
         flash("A cópia de cardápios só é permitida para quabras com mesmo periodo")
-        return redirect(url_for('backlog'))
+        return redirect(url_for('pendencias_app.backlog'))
 
     depara = db_functions.select_all()
     depara = get_depara(depara)
@@ -802,14 +781,6 @@ def download_csv():
 
             return ('', 200)
 
-
-def get_semana(dia_semana_seguinte):
-    semana = [dia_semana_seguinte + datetime.timedelta(days=i) for i in
-              range(0 - dia_semana_seguinte.weekday(), 7 - dia_semana_seguinte.weekday())]
-
-    return semana
-
-
 # BLOCO MAPA DE PENDENCIAS
 @app.route('/mapa_pendencias', methods=['GET', 'POST'])
 @flask_login.login_required
@@ -889,6 +860,7 @@ def mapa_pendencias():
 
 
 if __name__ == "__main__":
+
     app = create_app()
     db_setup.set()
     app.run(debug=True)

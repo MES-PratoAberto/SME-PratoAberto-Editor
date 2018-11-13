@@ -473,3 +473,11 @@ def replace_cardapio(cardapio):
     cardapio = [x for x in cardapio if x != '']
 
     return cardapio
+
+
+def get_semana(dia_semana_seguinte):
+
+    semana = [dia_semana_seguinte + datetime.timedelta(days=i) for i in
+              range(0 - dia_semana_seguinte.weekday(), 7 - dia_semana_seguinte.weekday())]
+
+    return semana
