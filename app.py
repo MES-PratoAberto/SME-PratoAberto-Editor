@@ -16,6 +16,7 @@ import db_functions
 import db_setup
 from login.login import login_app
 from configuracoes.configuracoes import config_app
+from upload.upload import upload_app
 from utils.utils import get_publicacao,caso_nao_cardapio,get_depara,get_cardapio_atual,get_cardapio_anterior,\
                         get_cardapio_lista,get_cardapios_terceirizadas,get_quebras_escolas,get_cardapio,get_escola,\
                         get_escolas,get_grupo_publicacoes,allowed_file,dia_semana
@@ -25,6 +26,7 @@ def create_app():
     app = Flask(__name__)
     app.register_blueprint(login_app)
     app.register_blueprint(config_app)
+    app.register_blueprint(upload_app)
     return app
 
 app = create_app()
@@ -104,109 +106,6 @@ def publicados():
         status = "publicadas"
         return get_publicacao(status)
 
-
-@app.route('/upload', methods=['POST'])
-@flask_login.login_required
-def upload_file():
-    if 'file' not in request.files:
-        flash('No file part')
-
-        return redirect(request.url)
-
-    file = request.files['file']
-
-    if file.filename == '':
-        flash('No selected file')
-
-        return redirect(request.url)
-
-    if file and allowed_file(file.filename):
-
-        filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-
-        try:
-
-            cardapio_dict = cardapio_xml_para_dict.create(os.path.join(app.config['UPLOAD_FOLDER'], filename))
-            cardapios_preview = []
-            json_list = []
-            responses = {}
-
-            for tipo_atendimento, v1 in cardapio_dict.items():
-
-                for tipo_unidade, v2 in v1.items():
-
-                    for agrupamento, v3 in v2.items():
-
-                        for idade, v4 in v3.items():
-
-                            for data, v5 in v4.items():
-
-                                query = {
-                                    'tipo_atendimento': tipo_atendimento,
-                                    'tipo_unidade': tipo_unidade,
-                                    'agrupamento': agrupamento,
-                                    'idade': idade,
-                                }
-                                _key = frozenset(query.items())
-
-                                if _key not in responses:
-                                    args = (api,
-                                            data,
-                                            data,
-                                            '&'.join(['%s=%s' % item for item in query.items()]),
-                                            '&'.join(
-                                                ['status=%s' % item for item in
-                                                 ['PUBLICADO', 'SALVO', 'PENDENTE', 'DELETADO']]))
-                                    responses[_key] = requests.get(
-                                        '{}/editor/cardapios?data_inicial={}&data_final={}&{}&{}'.format(*args)).json()
-
-                                cardapio = query
-                                cardapio['data'] = data
-
-                                if responses[_key]:
-
-                                    cardapio.update({
-                                        'cardapio': {'DUPLICADO': ['DUPLICADO']},
-                                        'status': 'DUPLICADO'
-                                    })
-                                else:
-
-                                    cardapio.update({
-                                        'cardapio_original': {k: list(map(str.strip, v.split(','))) for (k, v) in
-                                                              v5.items()},
-                                        'cardapio': {k: list(map(str.strip, v.split(','))) for (k, v) in v5.items()},
-                                        'status': 'PENDENTE'
-                                    })
-                                    json_list.append(cardapio)
-
-                                cardapios_preview.append(cardapio)
-
-            json_dump = json.dumps(json_list)
-
-        except:
-
-            cardapios_preview, json_dump = [], {}
-
-        return render_template("preview_json.html", filename=filename, cardapios_preview=cardapios_preview,
-                               json_dump=json_dump)
-
-
-@app.route('/cria_terceirizada', methods=['GET'])
-@flask_login.login_required
-def cria_terceirizada():
-    if request.method == "GET":
-        quebras = db_functions.select_quebras_terceirizadas()
-        editais = set([x[1] for x in quebras])
-        tipo_unidade = set([x[0] for x in quebras])
-        idade = set([x[2] for x in quebras])
-        refeicao = set([x[3] for x in quebras])
-
-        return render_template("cria_terceirizadas.html",
-                               editais=editais,
-                               tipo_unidade=tipo_unidade,
-                               idades=idade,
-                               refeicoes=refeicao)
 
 @app.route('/upload_terceirizada', methods=['POST'])
 @flask_login.login_required
@@ -525,15 +424,6 @@ def atualiza_config_cardapio():
     else:
 
         return ('', 200)
-
-
-@app.route('/escolas', methods=['GET'])
-@flask_login.login_required
-def escolas():
-    if request.method == "GET":
-        escolas = get_escolas()
-
-        return render_template("configurações_escolas.html", escolas=escolas)
 
 
 @app.route('/atualiza_historico_escolas', methods=['POST'])
