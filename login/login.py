@@ -34,7 +34,7 @@ def login():
             user.id = email
             flask_login.login_user(user)
 
-            return redirect(url_for('backlog'))
+            return redirect(url_for('pendencias_app.backlog'))
 
     flash('Senha ou usuario nao identificados')
 
